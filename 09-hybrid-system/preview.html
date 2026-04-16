@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hybrid System - Agent + RAG + Tools</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      margin: 40px;
+      color: #222;
+      max-width: 1000px;
+    }
+    h1, h2, h3 {
+      color: #1f3b5b;
+    }
+    pre {
+      background: #f4f6f8;
+      border: 1px solid #d9e2ec;
+      padding: 14px;
+      overflow-x: auto;
+      border-radius: 6px;
+    }
+    code {
+      font-family: Menlo, Consolas, monospace;
+    }
+    .note {
+      background: #eef6ff;
+      border-left: 4px solid #4a90e2;
+      padding: 12px 14px;
+      margin: 16px 0;
+    }
+    .good {
+      background: #f3fbf6;
+      border-left: 4px solid #2ca24f;
+      padding: 12px 14px;
+      margin: 16px 0;
+    }
+    ul, ol {
+      margin-top: 0.3rem;
+    }
+    hr {
+      margin: 28px 0;
+      border: 0;
+      border-top: 1px solid #d9e2ec;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Hybrid System: Agent + RAG + Tools</h1>
+
+<p>
+This document describes a hybrid AI system that combines:
+</p>
+
+<ul>
+  <li><strong>Agent / Router</strong> for deciding how to handle a question</li>
+  <li><strong>Tools</strong> for structured operations like ICD lookup and reimbursement lookup</li>
+  <li><strong>RAG</strong> for answering knowledge questions from documents</li>
+  <li><strong>LLM synthesis</strong> for producing a final answer from gathered evidence</li>
+</ul>
+
+<div class="note">
+  <strong>Core idea:</strong> not every question should be handled the same way.
+  Some questions are better served by structured tools. Others need retrieval from documents.
+  Some need both.
+</div>
+
+<hr>
+
+<h2>What This System Should Handle</h2>
+
+<ul>
+  <li>What is the ICD code for chest pain?</li>
+  <li>What is the reimbursement for R07.9?</li>
+  <li>What is the reimbursement for chest pain?</li>
+  <li>What are EBM codes used for?</li>
+  <li>Can smoking make asthma worse?</li>
+</ul>
+
+<p>
+The system should answer these questions by choosing the right combination of:
+</p>
+
+<ul>
+  <li>tool calls for structured lookups</li>
+  <li>RAG for document-based knowledge</li>
+  <li>LLM reasoning to combine results into a natural answer</li>
+</ul>
+
+<hr>
+
+<h2>High-Level Architecture</h2>
+
+<pre><code>User Question
+   ↓
+Agent / Router
+   ↓
+Decide:
+- Use tool?
+- Use RAG?
+- Use both?
+   ↓
+Gather evidence
+   ↓
+Generate final answer</code></pre>
+
+<p>
+This is a controlled hybrid design. It is intentionally simpler and clearer than a fully autonomous
+agent stack.
+</p>
+
+<hr>
+
+<h2>Recommended Project Structure</h2>
+
+<pre><code>09-hybrid-system/
+├── main.py
+├── data/
+│   └── notes.txt
+├── tools/
+│   ├── __init__.py
+│   ├── icd.py
+│   └── reimbursement.py
+├── rag/
+│   ├── __init__.py
+│   └── engine.py
+├── agent/
+│   ├── __init__.py
+│   └── router.py
+├── .env
+├── README.md
+└── requirements.txt</code></pre>
+
+<hr>
+
+<h2>Component Responsibilities</h2>
+
+<h3>1. Tools</h3>
+<p>
+Tools handle structured business logic that should be deterministic and trusted.
+</p>
+
+<ul>
+  <li><code>lookup_icd_code(term)</code> maps a symptom or diagnosis term to an ICD code</li>
+  <li><code>estimate_reimbursement(icd_code)</code> maps an ICD code to a reimbursement estimate</li>
+</ul>
+
+<h3>2. RAG Engine</h3>
+<p>
+RAG handles knowledge-style questions by retrieving relevant information from documents in the
+<code>data/</code> folder and using that as context for an LLM.
+</p>
+
+<h3>3. Router</h3>
+<p>
+The router inspects the user’s question and decides whether the system should:
+</p>
+
+<ul>
+  <li>use a structured tool</li>
+  <li>use RAG</li>
+  <li>use both tools and RAG in sequence</li>
+</ul>
+
+<h3>4. Synthesizer</h3>
+<p>
+The synthesizer is the final LLM call that turns gathered evidence into a clean answer.
+</p>
+
+<hr>
+
+<h2>Tools Code</h2>
+
+<h3><code>tools/icd.py</code></h3>
+<pre><code>def lookup_icd_code(term: str) -&gt; dict:
+    codes = {
+        "chest pain": {"code": "R07.9", "description": "Chest pain, unspecified"},
+        "hypertension": {"code": "I10", "description": "Essential (primary) hypertension"},
+        "asthma": {"code": "J45.909", "description": "Unspecified asthma, uncomplicated"},
+    }
+
+    key = term.strip().lower()
+    if key in codes:
+        return {"found": True, "term": key, **codes[key]}
+    return {"found": False, "message": f"No ICD code found for '{term}'"}</code></pre>
+
+<h3><code>tools/reimbursement.py</code></h3>
+<pre><code>def estimate_reimbursement(icd_code: str) -&gt; dict:
+    estimates = {
+        "R07.9": {"estimated_amount": 125, "currency": "USD"},
+        "I10": {"estimated_amount": 95, "currency": "USD"},
+        "J45.909": {"estimated_amount": 140, "currency": "USD"},
+    }
+
+    code = icd_code.strip().upper()
+    if code in estimates:
+        return {"found": True, "icd_code": code, **estimates[code]}
+    return {"found": False, "message": f"No reimbursement estimate found for '{code}'"}</code></pre>
+
+<hr>
+
+<h2>RAG Engine Code</h2>
+
+<h3><code>rag/engine.py</code></h3>
+<pre><code>from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, PromptTemplate
+
+def build_query_engine():
+    documents = SimpleDirectoryReader("data").load_data()
+    index = VectorStoreIndex.from_documents(documents)
+
+    qa_template = PromptTemplate(
+        "Use the context to answer the question. "
+        "You may combine multiple facts. "
+        "If insufficient, say so.\\n\\n"
+        "Context:\\n{context_str}\\n\\n"
+        "Question: {query_str}\\n"
+        "Answer:"
+    )
+
+    return index.as_query_engine(text_qa_template=qa_template)</code></pre>
+
+<div class="note">
+  <strong>What this does:</strong> loads documents, builds a vector index, and returns a query engine
+  that can retrieve relevant chunks and answer questions from them.
+</div>
+
+<hr>
+
+<h2>Router Code</h2>
+
+<h3><code>agent/router.py</code></h3>
+<pre><code>def classify_query(query: str) -&gt; str:
+    q = query.lower()
+
+    if "icd" in q and "reimbursement" not in q:
+        return "icd_lookup"
+
+    if "reimbursement" in q and "icd" in q:
+        return "reimbursement_by_icd"
+
+    if "reimbursement" in q:
+        return "reimbursement_by_symptom"
+
+    return "rag"</code></pre>
+
+<p>
+This is intentionally simple and deterministic. It is not meant to be “smart” yet.
+It is meant to be clear and debuggable.
+</p>
+
+<hr>
+
+<h2>Main Orchestration Code</h2>
+
+<h3><code>main.py</code></h3>
+<pre><code>import os
+from dotenv import load_dotenv
+from openai import OpenAI
+
+from tools.icd import lookup_icd_code
+from tools.reimbursement import estimate_reimbursement
+from rag.engine import build_query_engine
+from agent.router import classify_query
+
+load_dotenv()
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+query_engine = build_query_engine()
+
+def synthesize_answer(query: str, evidence: str) -&gt; str:
+    response = client.responses.create(
+        model="gpt-4.1-mini",
+        input=[
+            {
+                "role": "system",
+                "content": (
+                    "You are a healthcare AI assistant. "
+                    "Use the provided evidence to answer clearly and concisely. "
+                    "If evidence is incomplete, say so."
+                )
+            },
+            {
+                "role": "user",
+                "content": f"Question: {query}\\n\\nEvidence:\\n{evidence}"
+            }
+        ]
+    )
+    return response.output_text
+
+query = input("Ask: ")
+route = classify_query(query)
+
+print(f"\\nRoute selected: {route}")
+
+if route == "icd_lookup":
+    term = query.lower().replace("what is the icd code for", "").strip(" ?")
+    result = lookup_icd_code(term)
+    evidence = str(result)
+    answer = synthesize_answer(query, evidence)
+
+elif route == "reimbursement_by_icd":
+    words = query.replace("?", "").split()
+    icd_code = None
+    for w in words:
+        if "." in w or w.upper().startswith(("R", "I", "J")):
+            icd_code = w
+            break
+
+    if icd_code:
+        result = estimate_reimbursement(icd_code)
+    else:
+        result = {"found": False, "message": "No ICD code identified in query."}
+
+    evidence = str(result)
+    answer = synthesize_answer(query, evidence)
+
+elif route == "reimbursement_by_symptom":
+    term = query.lower().replace("what is the reimbursement for", "").strip(" ?")
+    icd_result = lookup_icd_code(term)
+
+    if icd_result.get("found"):
+        reimb_result = estimate_reimbursement(icd_result["code"])
+        evidence = f"ICD lookup result: {icd_result}\\nReimbursement result: {reimb_result}"
+    else:
+        evidence = f"ICD lookup result: {icd_result}"
+
+    answer = synthesize_answer(query, evidence)
+
+else:
+    rag_response = query_engine.query(query)
+    evidence = str(rag_response)
+    answer = synthesize_answer(query, evidence)
+
+print("\\nAnswer:\\n")
+print(answer)</code></pre>
+
+<hr>
+
+<h2>How the Main Flow Works</h2>
+
+<p>
+The system follows this sequence:
+</p>
+
+<ol>
+  <li>Ask the user for a question</li>
+  <li>Classify the question using the router</li>
+  <li>Choose the correct path:
+    <ul>
+      <li>ICD lookup</li>
+      <li>reimbursement by ICD</li>
+      <li>reimbursement by symptom</li>
+      <li>RAG-based knowledge answer</li>
+    </ul>
+  </li>
+  <li>Gather evidence from tools and/or RAG</li>
+  <li>Pass the evidence to the LLM for final answer generation</li>
+</ol>
+
+<hr>
+
+<h2>Why This Architecture Is Good</h2>
+
+<div class="good">
+  <strong>Clear separation of concerns:</strong>
+  <ul>
+    <li><strong>Router</strong> decides the path</li>
+    <li><strong>Tools</strong> perform structured deterministic work</li>
+    <li><strong>RAG</strong> handles document-based knowledge</li>
+    <li><strong>LLM</strong> turns evidence into a user-facing answer</li>
+  </ul>
+</div>
+
+<p>
+This is a strong architecture because it avoids mixing:
+</p>
+
+<ul>
+  <li>routing logic</li>
+  <li>business logic</li>
+  <li>knowledge retrieval</li>
+  <li>response writing</li>
+</ul>
+
+<hr>
+
+<h2>Example Query Paths</h2>
+
+<h3>1. What is the ICD code for chest pain?</h3>
+<ul>
+  <li>Route: <code>icd_lookup</code></li>
+  <li>Tool: <code>lookup_icd_code("chest pain")</code></li>
+  <li>LLM formats final answer</li>
+</ul>
+
+<h3>2. What is the reimbursement for R07.9?</h3>
+<ul>
+  <li>Route: <code>reimbursement_by_icd</code></li>
+  <li>Tool: <code>estimate_reimbursement("R07.9")</code></li>
+  <li>LLM formats final answer</li>
+</ul>
+
+<h3>3. What is the reimbursement for chest pain?</h3>
+<ul>
+  <li>Route: <code>reimbursement_by_symptom</code></li>
+  <li>Tool 1: ICD lookup</li>
+  <li>Tool 2: reimbursement lookup</li>
+  <li>LLM combines the evidence</li>
+</ul>
+
+<h3>4. What are EBM codes used for?</h3>
+<ul>
+  <li>Route: <code>rag</code></li>
+  <li>RAG retrieves relevant text from documents</li>
+  <li>LLM answers from retrieved content</li>
+</ul>
+
+<h3>5. Can smoking make asthma worse?</h3>
+<ul>
+  <li>Route: <code>rag</code></li>
+  <li>RAG retrieves supporting facts from documents</li>
+  <li>LLM synthesizes the answer from those facts</li>
+</ul>
+
+<hr>
+
+<h2>Why Not Use a Fully Autonomous Agent Yet?</h2>
+
+<p>
+At this stage, the goal is architecture clarity, not maximum autonomy.
+</p>
+
+<p>
+A fully autonomous system that mixes:
+</p>
+
+<ul>
+  <li>tool calling</li>
+  <li>RAG</li>
+  <li>multi-step looping</li>
+  <li>framework abstractions</li>
+</ul>
+
+<p>
+can become hard to debug very quickly.
+</p>
+
+<p>
+This controlled hybrid design is better because you can clearly see:
+</p>
+
+<ul>
+  <li>which route was selected</li>
+  <li>which evidence was gathered</li>
+  <li>how the final answer was produced</li>
+</ul>
+
+<hr>
+
+<h2>What You Learn From This Project</h2>
+
+<ul>
+  <li>how to combine structured and unstructured AI patterns</li>
+  <li>when tools are better than retrieval</li>
+  <li>when retrieval is better than tools</li>
+  <li>how to create clean workflow boundaries</li>
+  <li>how to design a portfolio-grade AI system</li>
+</ul>
+
+<hr>
+
+<h2>Recommended Build Order</h2>
+
+<ol>
+  <li>Create the folder structure</li>
+  <li>Copy working <code>icd.py</code> and <code>reimbursement.py</code></li>
+  <li>Move the working LlamaIndex setup into <code>rag/engine.py</code></li>
+  <li>Add the simple router</li>
+  <li>Wire <code>main.py</code></li>
+  <li>Test the example queries</li>
+</ol>
+
+<hr>
+
+<h2>Useful Debug Prints</h2>
+
+<p>
+Add these while testing:
+</p>
+
+<pre><code>print(f"Route selected: {route}")
+print(f"Evidence used:\\n{evidence}")</code></pre>
+
+<p>
+These make it much easier to understand whether failures come from:
+</p>
+
+<ul>
+  <li>routing</li>
+  <li>tool results</li>
+  <li>retrieval</li>
+  <li>synthesis</li>
+</ul>
+
+<hr>
+
+<h2>Success Criteria</h2>
+
+<p>
+When this project works, you will have your first <strong>portfolio-grade AI system</strong>:
+</p>
+
+<ul>
+  <li>structured tools</li>
+  <li>RAG knowledge retrieval</li>
+  <li>routing logic</li>
+  <li>LLM-based synthesis</li>
+</ul>
+
+<p>
+That is a meaningful milestone.
+</p>
+
+</body>
+</html>

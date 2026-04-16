@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LlamaIndex RAG Overview</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #2c3e50;
+        }
+        ul {
+            margin-top: 0;
+        }
+        .step {
+            margin-bottom: 15px;
+        }
+        .highlight {
+            background-color: #f4f6f7;
+            padding: 10px;
+            border-left: 4px solid #3498db;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+
+<h1>LlamaIndex RAG System (Simple Explanation)</h1>
+
+<p>
+This code builds a <strong>RAG (Retrieval-Augmented Generation)</strong> system using LlamaIndex.
+It allows you to ask questions about your own data, and the AI answers using that data.
+</p>
+
+<h2>Step-by-step breakdown</h2>
+
+<div class="step">
+<strong>load_dotenv()</strong><br>
+Loads your OpenAI API key from the <code>.env</code> file so your code can securely call the model.
+</div>
+
+<div class="step">
+<strong>SimpleDirectoryReader("data")</strong><br>
+Reads all files inside the <code>data/</code> folder and converts them into a format the system can process.
+</div>
+
+<div class="step">
+<strong>VectorStoreIndex.from_documents(...)</strong><br>
+This is the core setup:
+<ul>
+    <li>Breaks documents into chunks</li>
+    <li>Converts each chunk into embeddings (vector representations)</li>
+    <li>Stores them in a searchable index</li>
+</ul>
+<p>
+This replaces your manual chunking, embedding, and FAISS setup.
+</p>
+</div>
+
+<div class="step">
+<strong>index.as_query_engine()</strong><br>
+Converts the index into a search + answer system.
+<p>
+It combines:
+<ul>
+    <li>Retrieval (find relevant chunks)</li>
+    <li>Generation (LLM answer)</li>
+</ul>
+</p>
+</div>
+
+<div class="step">
+<strong>query_engine.query(query)</strong><br>
+
+This runs the full pipeline:
+
+<ol>
+    <li>Takes your question</li>
+    <li>Converts it into an embedding</li>
+    <li>Finds relevant chunks from your data</li>
+    <li>Sends question + context to the LLM</li>
+    <li>Generates the final answer</li>
+</ol>
+
+</div>
+
+<h2>What’s happening behind the scenes</h2>
+
+<div class="highlight">
+Documents → Chunking → Embeddings → Vector Search → Context → LLM → Answer
+</div>
+
+<h2>Key Insight</h2>
+
+<p>
+LlamaIndex is not doing anything new. It is automating the pipeline you previously built manually:
+</p>
+
+<ul>
+    <li>Embeddings</li>
+    <li>Retrieval</li>
+    <li>Vector search (FAISS)</li>
+    <li>Prompt wiring</li>
+</ul>
+
+<p>
+The difference is: less code, but less control.
+</p>
+
+<h2>Tradeoff</h2>
+
+<strong>Pros</strong>
+<ul>
+    <li>Fast to build</li>
+    <li>Clean abstraction</li>
+    <li>Good for prototypes</li>
+</ul>
+
+<strong>Cons</strong>
+<ul>
+    <li>Harder to debug</li>
+    <li>Less control over retrieval</li>
+    <li>Hidden complexity</li>
+</ul>
+
+<h2>When to use</h2>
+
+<ul>
+    <li>Document Q&A systems</li>
+    <li>Rapid prototyping</li>
+</ul>
+
+<h2>When not to rely on it blindly</h2>
+
+<ul>
+    <li>When retrieval quality is critical</li>
+    <li>When debugging complex behavior</li>
+</ul>
+
+<h2>Summary</h2>
+
+<p>
+Ask question → Retrieve relevant data → Generate answer using that data
+</p>
+
+<h2>One-line takeaway</h2>
+
+<p>
+<strong>LlamaIndex turns your manual RAG pipeline into a single function call.</strong>
+</p>
+
+</body>
+</html>
