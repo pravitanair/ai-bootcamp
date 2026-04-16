@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<body>
+
+    <p>The <code>zip()</code> function takes multiple lists (or any "iterables") and pairs their items together based on their position, like a <strong>physical zipper</strong> on a jacket.</p>
+    <p>It creates a series of tuples: the first items from each list are paired, then the second items, and so on.</p>
+
+    <h2>A Simple Example:</h2>
+    <pre>
+names = ["Alice", "Bob"]
+scores = [85, 92]
+paired = zip(names, scores)
+print(list(paired)) # Output: [('Alice', 85), ('Bob', 92)]
+    </pre>
+
+    <h2>Why use it in your code?</h2>
+    <p>In your sentiment analysis script, you have two separate lists:</p>
+    <ol>
+        <li><strong>texts</strong>: Your original sentences.</li>
+        <li><strong>results</strong>: The model's predictions.</li>
+    </ol>
+
+    <p>By using <code>for text, result in zip(texts, results):</code>, you are telling Python: "Give me the first sentence and its matching result, then the second sentence and its matching result," so they stay perfectly <strong>aligned</strong> during the print loop.</p>
+    <p><em>Pro-tip: If the lists are different lengths, zip stops as soon as the shortest list runs out.</em></p>
+    <p>Would you like to see how to use zip to create a dictionary from those two lists?</p>
+
+    <hr>
+
+    <p>This code uses a <strong>Text Generation</strong> model to automatically complete a sentence based on a starting "prompt." Here is the breakdown:</p>
+    <ul>
+        <li><code>pipeline("text-generation", model="distilgpt2")</code>: This initializes a generator using <strong>DistilGPT2</strong>, a lightweight version of the famous GPT-2 model. It’s faster and uses less memory than larger models while still being capable of writing human-like text.</li>
+        <li><code>prompt</code>: This is your starting point. The model will look at these words and predict what should come next.</li>
+        <li><code>generator(prompt, ...)</code>: This sends your text to the model with specific instructions:
+            <ul>
+                <li><code>max_length=40</code>: Limits the total output (including your prompt) to 40 "tokens" (roughly words/parts of words).</li>
+                <li><code>num_return_sequences=1</code>: Tells the model to only give you one version of the completed text.</li>
+            </ul>
+        </li>
+        <li><code>result[0]["generated_text"]</code>: The model returns a list of dictionaries. This line digs into the first result and extracts only the final string of text so you can print it.</li>
+    </ul>
+
+    <p>Because this model is "stochastic" (randomized), you might get a slightly <strong>different sentence</strong> every time you run it!</p>
+
+</body>
+</html>
